@@ -1,0 +1,346 @@
+---
+title: "Data Uniformity: A Statistic Assessment and management of Outlier and Missing Values In R "
+output: html_notebook
+---
+
+By Ebenezer Akpati
+
+July 6, 2023
+
+## Introduction
+The uniformity of a dataset helps the analyst to get an accurate result or an higher accuracy; two major issues to accuracy are from outliers and missing values not handled well. Thus, pre-processing of your data value is the crucial point of any analysis and the focal point of any analyst whose interest is getting accurate insight from the dataset.
+
+Donald Rubin Statement: "Missing data are just another example of outliers." Donald Rubin highlighted the connection between missing data and outliers. He viewed missing data as a form of outliers, indicating observations that are different from the complete data. Rubin's statement suggests that missing data should be treated as a distinct type of outlier in data analysis.
+
+## Tukey's rule
+Tukey's rule says that the outliers are values more than 1.5 times the interquartile range from the quartiles — either below Q1 − 1.5IQR, or above Q3 + 1.5IQR.
+
+I shall look at two method of handling outlier in this article, bagImpute and the imputate_outlier method. The choice between the "bagImpute" method and "imputate_outlier" method (specifically using "capping" as the imputation approach) depends on the nature of your data and the specific requirements of your research.
+
+The "bagImpute" method is a more comprehensive approach that takes into account the overall patterns and relationships in the data to impute missing values. It utilizes multiple imputation based on bootstrap samples and can capture the uncertainty and variability in the imputed values. This method is generally more suitable when you have a larger dataset and want to impute missing values considering the entire dataset.
+
+On the other hand, "imputate_outlier" with "capping" is a simpler approach that specifically focuses on handling outliers by replacing them with values within a predefined range. This method is useful when you have identified outliers in your data and want to replace them with more reasonable values. It is particularly suitable when you have a small number of outliers and want a quick and straightforward way to address them.
+
+## Data Source:
+The library(faraway) makes the data used in this analysis available while data(pima) calls up this particular dataset. The pima dataset is not a built-in dataset in R. It is part of the faraway package, which provides various datasets used in the book "Faraway, J.J. (2006). Extending the Linear Model with R". The pima dataset contains information about diabetes patients.
+
+## loading and calling up required  packages
+```{r}
+library(tidyverse)
+library(dplyr)
+library(readr)
+library(ggplot2)
+library(caret)
+library(faraway)
+library(reshape2)
+data(pima)
+```
+
+## summary Information of My Dataset
+This is a quick way to get the usual univariate summary information. At this stage, we are looking for anything unusual or unexpected perhaps indicating a data entry error. Five variables have minimum values of zero; looking at what these veriables represents, No blood pressure is not good for the health — something must be wrong and it is not possible for some one to have a BMI of zero and zero blood presure.
+
+```{r}
+summary(pima)
+dim(pima)
+```
+## sort the BMI columns
+We see that the first 11 values are zero. The description that comes with the data says nothing about it but it seems likely that the zero has been used as a missing value code. For one reason or another, the researchers did not obtain the bmi of 11 patients. In a real investigation, one would likely be able to question the researchers about what really happened because one cannot have zero bmi reading, Nevertheless, this does illustrate the kind of misunderstanding a data analyst encounters.
+
+```{r}
+#sort(pima$bmi)
+sorted_bmi <- sort(pima$bmi)
+sorted_bmi
+```
+
+A careless statistician might overlook these presumed missing values and complete an analysis assuming that these were real observed zeroes. If the error was later discovered, they might then
+blame the researchers for using 0 as a missing value code (not a good choice since it is a valid value for some of the variables) and not mentioning it in their data description. Unfortunately such oversights are not uncommon particularly with datasets of any size or complexity. The statistician bears some share of responsibility for spotting these mistakes. We set all zero values of the five variables to NA which is the missing value code used by R . (Julian J. Faraway
+July 2002)
+
+```{r}
+pima$diastolic[pima$diastolic == 0] <- NA
+pima$glucose[pima$glucose == 0] <- NA
+pima$triceps[pima$triceps == 0] <- NA
+pima$insulin[pima$insulin == 0] <- NA
+pima$bmi[pima$bmi == 0] <- NA
+```
+
+## Imputing missing values 
+We can choose any approach to impute the missing data. There are packages like mice and caret, for example, that can handle this for you. vis_dat(), visualize the entire dataset and vis_miss shows only the missing value
+
+```{r}
+library(dlookr)
+plot_na_pareto(pima, only_na = TRUE)
+
+```
+ plot_na_pareto is from the dlookr package, it shows the level of missing data that can be tolerated in an analysis. <= 10 % is ok and from <= 20% is not bad, but from 21% to 50% is bad, following this lead, insulin and triceps missing records are in the range of bad. you can also use vis_dat(),vis_miss() and missRanger() functions to see the state of the missing data in your data set, note you will have to install visdat package 
+ 
+```{r}
+library(visdat)
+vis_miss(pima)
+```
+
+## Removing Missing Values:
+
+Pros: Removing missing values can simplify the dataset and eliminate potential bias introduced by imputation methods. It can also make certain analyses or models easier to implement.
+
+Cons: Removing missing values can result in a reduction of sample size, potentially leading to loss of information and statistical power. It may also introduce bias if the missing values are not missing completely at random (MCAR).
+
+## Replacing Missing Values:
+
+Pros: Replacing missing values allows you to retain the complete dataset and avoid sample size reduction. Imputation techniques can help preserve statistical power and reduce bias when missing values are not MCAR.
+
+Cons: Imputation introduces uncertainty and potential bias depending on the chosen imputation method. The imputed values may not accurately reflect the true missing values, leading to distorted results. Imputation methods can also be sensitive to the specific characteristics of the dataset.
+
+The choice between removing or replacing missing values depends on various factors such as the nature and extent of missingness, the analysis objectives, the underlying assumptions of the data, and the specific techniques available for imputation. It is essential to carefully consider the potential effects and limitations of each approach before making a decision.
+
+## BagImpute Method of Handling Missing Values
+```{r}
+sub_pima <-(pima[1:8])
+# use method bagImpute
+pre_proc <- preProcess(sub_pima, method = "bagImpute")
+# predict Missing Variables
+train_pima <- predict(pre_proc, sub_pima)
+
+# Include the 9th column back into the dataset
+imputed_pima <- cbind(train_pima, pima[9])
+
+# Assign the imputed dataset back to the original variable
+pima <- imputed_pima
+```
+
+
+
+```{r}
+# Check if there are any missing values in pima
+sum(is.na(pima))
+dim(pima)
+```
+no data has been lost, the size of the dataset is still 768 and 9 column
+
+The variable 'test' is not quantitative but categorical. Such variables are also called factors. However, because of the numerical coding, this variable has been treated as if it were quantitative. It’s best to designat such variables as factors so that they are treated appropriately. Sometimes people forget this and compute stupid statistics such as “average zip code”. (Julian J. Faraway
+July 2002)
+
+```{r}
+pima$test <- factor(pima$test)
+summary(pima$test)
+```
+We now see that 500 cases were negative and 268 positive. Even better is to use descriptive labels:
+
+```{r}
+levels(pima$test) <- c("negative","positive")
+summary(pima)
+```
+## None Parametic Test
+Nonparametric tests, also known as distribution-free tests, are statistical tests that do not make any assumptions about the underlying distribution of the data. These tests are useful when the data does not meet the assumptions required by parametric tests, such as normality or equal variances. in this analysis i will use bmi and  diastolic to see the normality of  pima dataset
+
+
+```{r}
+# Plot histogram with density
+ggplot(data = pima, aes(x = bmi, y = after_stat(density))) +
+  geom_histogram(colour = "black", bins = 25) +
+  geom_density(colour = "blue", linewidth = 1.2)
+
+# Plot histogram with density
+ggplot(data =pima, aes(x =  diastolic, y = after_stat(density))) +
+  geom_histogram(colour = "black", bins = 25) +
+  geom_density(colour = "blue", linewidth = 1.2)
+
+```
+
+in terms of normality, diastolic seems to be more normally distributed when compare to bmi distribution, however lets look at their mean and sd distribution, the mean and the sd followed same distribution in both bmi and diastolicdata distribution
+
+
+```{r}
+
+# Plot histogram and density
+ggplot(data = pima, aes(x = diastolic)) +
+  geom_histogram(aes(y = ..density..), bins = 25, colour = "black") +
+  geom_density(colour = "blue", linewidth = 1.3) +
+  stat_function(
+    fun = dnorm,
+    args = list(mean = mean(pima$diastolic), sd = sd(pima$diastolic)),
+    colour = "red",
+    size = 1
+  ) +
+  labs(x = "Diastolic", y = "Density") +
+  ggtitle("Histogram and Density of Diastolic") +
+  theme_minimal()
+
+
+# Plot histogram and density
+ggplot(data = pima, aes(x = bmi)) +
+  geom_histogram(aes(y = ..density..), bins = 25, colour = "black") +
+  geom_density(colour = "blue", linewidth = 1.3) +
+  stat_function(
+    fun = dnorm,
+    args = list(mean = mean(pima$bmi), sd = sd(pima$bmi)),
+    colour = "red",
+    size = 1
+  ) +
+  labs(x = "BMI", y = "Density") +
+  ggtitle("Histogram and Density of Diastolic") +
+  theme_minimal()
+
+```
+
+## Quantitative Nomality
+
+Quantitative normality refers to the assumption or condition that a quantitative variable follows a normal distribution. The normal distribution, also known as the Gaussian distribution or bell curve, is a symmetric probability distribution characterized by its bell-shaped curve.
+
+When a quantitative variable follows a normal distribution, it exhibits specific properties and characteristics. These include:
+
+Symmetry: The distribution is symmetric around its mean, with equal probabilities of values occurring on either side of the mean.
+
+Unimodality: The distribution has a single peak, indicating a central value around which the data cluster.
+
+Constant standard deviation: The variability of the data is consistent across the distribution, with the standard deviation remaining constant.
+
+```{r}
+library(summarytools)
+descr(pima$bmi)
+```
+
+```{r}
+library(knitr)
+# Create a subset of the pima dataset with the desired columns
+subset_data <- pima[, c(1,2,3,4,5,6,7,8)]
+
+# Generate the descriptive statistics table using descr function
+table <- descr(subset_data)
+
+# Print the ktable
+#kable(table)
+table
+```
+The table displays the descriptive statistics for the variables in the pima dataset, which includes the columns age, bmi, diastolic, glucose, insulin, pregnant, and triceps. Here is an explanation of each measure, the N. Valid in all the columns remains 768, this point to the fact that NA were taken care of by the "bagImpute" method from caret package.
+
+IQR: The interquartile range, calculated as the difference between the third and first quartiles.
+CV: The coefficient of variation, which is the ratio of the standard deviation to the mean.
+Skewness: A measure of the asymmetry of the distribution. Positive skewness indicates a longer tail on the right side.
+SE.Skewness: The standard error of skewness.
+Kurtosis: A measure of the "tailedness" of the distribution. Positive kurtosis indicates heavier tails compared to a normal distribution.
+N.Valid: The number of valid (non-missing) values in each variable.
+Pct.Valid: The percentage of valid values out of the total observations.
+These statistics provide information about the central tendency, spread, skewness, kurtosis, and validity of the variables in the dataset.
+
+## Analyze the P value of Skewness and Kurtosis 
+```{r}
+
+# Perform Shapiro-Wilk test on each column
+shapiro_results <- lapply(pima[c(1,2,3,4,5,6,7,8)], shapiro.test)
+
+# Extract p-values from the test results
+p_values <- sapply(shapiro_results, function(x) x$p.value)
+
+# Combine the column names and p-values into a data frame
+result_df <- data.frame(Column = c(1,2,3,4,5,6,7,8),
+                        p_value = p_values)
+
+# Print the result table using kable
+#kable(result_df)
+result_df
+```
+The p-values for the pregnant, glucose, diastolic, triceps, insulin, bmi, and age columns are all less than 0.05. This suggests that there is sufficient evidence to reject the null hypothesis of normality for these variables, indicating that they may not follow a normal distribution.
+
+Multivariate normality is evidenced by p-values associated with multivariate skewness and kurtosis statistics that are > 0.05. then the data are assumed to follow a multivariate normal distribution where p>.05 (Korkmaz,  Goksuluk, & Zararsiz, 2014, 2019).
+
+
+## Handling Outlier in dataset
+we already seen that our dataset is skewed it is a pointer that there is an outlier in our data set i am going to plot one more graph to make everything clearer, then i will use two methods to handle it.
+
+
+```{r}
+ggplot(pima, mapping = aes(x = bmi, y = age, fill = diastolic)) + 
+  geom_boxplot(outlier.colour = "red", outlier.shape = 5, outlier.size = 4) + 
+  facet_wrap(~test)
+```
+
+
+
+An outlier is an observation that significantly deviates from the other observations in a dataset. It is a value that is unusually large or small compared to the majority of the data points. Outliers can arise due to various reasons such as measurement errors, data entry errors, natural variation, or truly extreme values.
+
+Outliers can have a significant impact on data analysis and statistical modeling. They can distort statistical measures such as the mean and standard deviation, as well as affect the results of certain statistical techniques. Therefore, it is important to identify and handle outliers appropriately based on the context of the analysis.
+
+## method one 
+```{r}
+# Select the desired columns
+selected_columns <- c(1, 2, 3, 4, 5, 6, 7, 8)
+pima_selected <- pima[, selected_columns]
+
+# Outlier detection and normalization function using Tukey's rule
+outlier_norm <- function(x) {
+  qntile <- quantile(x, probs = c(0.25, 0.75))
+  caps <- quantile(x, probs = c(0.05, 0.95))
+  H <- 1.5 * IQR(x, na.rm = TRUE)
+  x[x < (qntile[1] - H)] <- caps[1]
+  x[x > (qntile[2] + H)] <- caps[2]
+  return(x)
+}
+
+# Apply outlier detection and normalization to selected columns
+for (col in names(pima_selected)) {
+  pima_selected[[col]] <- outlier_norm(pima_selected[[col]])
+}
+
+# Melt the data for plotting
+
+melted_pima <- melt(pima_selected)
+
+# Plot boxplots for each column
+ggplot(melted_pima, aes(x = variable, y = value)) +
+  geom_boxplot(outlier.colour = "red", outlier.shape = 8, outlier.size = 4) +
+  labs(x = "Variable", y = "Value") +
+  theme_minimal()
+
+
+write_rds(pima_selected,"C:/Users/ebene/Desktop/umu_whassap/pima_selected.rds")
+pima_selected.rds<-read_rds("C:/Users/ebene/Desktop/umu_whassap/pima_selected.rds")
+```
+
+## comperision 
+the mean, standard diviation and median  before and after outlier treatments are :32.45961, 6.880279 and 32.3  before treatment and  :32.33677,  6.534469 and 32.3 after treatment the difference are not significants these shoes the caret model worked well in predicting the missing vales
+```{r}
+mean(pima$bmi)
+sd(pima$bmi)
+median(pima$bmi)
+mean(pima_selected$bmi)
+sd(pima_selected$bmi)
+median(pima_selected$bmi)
+```
+
+## method 2
+i am going to make it very simple and concise, i will onle use the bmi colume to demostrate this method, first i will dignose the dataset 
+
+```{r}
+pima_meth2 <-pima
+library(dlookr)
+outlier_diag <- diagnose_outlier(pima_meth2)
+print(outlier_diag)
+```
+Capping refers to replacing extreme values (outliers) with less extreme values that are within a specified range.
+
+In the case of the imputate_outlier(pima, xvar = bmi, "capping") function call, it will identify outliers in the "bmi" variable of the "pima" dataset and replace those outliers with values within a specified range.
+
+The specific range or threshold for capping outliers can be adjusted depending on the context and the desired treatment of outliers in the analysis.
+
+## Medoth two
+
+```{r}
+imputate_outlier(pima_meth2, xvar = bmi, "capping")
+
+ibm_no_outlier<-imputate_outlier(pima_meth2, xvar = bmi, "capping") # save it in a data fram
+```
+
+the ibm colum has a normal distribution after outlier was removed
+```{r}
+
+hist(ibm_no_outlier)
+
+```
+
+In summary, if you are primarily concerned with imputing missing values in your dataset and capturing the overall patterns, "bagImpute" method may be more appropriate. If your main focus is on handling outliers in specific variables, then "imputate_outlier" with "capping" can be a useful approach. Ultimately, the choice depends on your research goals, the characteristics of your data, and the specific context of your analysis.
+
+
+
+
+
